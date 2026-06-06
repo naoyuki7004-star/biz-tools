@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ディシジョンツリー | 意思決定分析</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f5f6fa; color: #2d3436; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Header */
+header { background: #fff; padding: 14px 24px; border-bottom: 1px solid #dfe6e9; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.hicon { width: 34px; height: 34px; background: #6c5ce7; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.hicon svg { fill: white; }
+h1 { font-size: 1.3rem; font-weight: 700; }
+.subtitle { font-size: 0.82rem; color: #636e72; margin-top: 1px; }
+.header-actions { margin-left: auto; display: flex; gap: 8px; }
+.btn-header { padding: 7px 14px; border: 1px solid #dfe6e9; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.82rem; color: #636e72; transition: all 0.15s; }
+.btn-header:hover { background: #f5f6fa; }
+.btn-reset { color: #d63031; border-color: #fab1a0; }
+.btn-reset:hover { background: #fff5f5; }
+
+/* Layout */
+main { display: flex; flex: 1; overflow: hidden; }
+
+/* Left Panel */
+.panel { width: 280px; min-width: 240px; background: #fff; border-right: 1px solid #dfe6e9; display: flex; flex-direction: column; overflow-y: auto; }
+.panel-section { padding: 16px; border-bottom: 1px solid #f0f0f0; }
+.panel-section h3 { font-size: 0.78rem; font-weight: 600; color: #636e72; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+
+.no-selection { padding: 24px 16px; text-align: center; color: #b2bec3; font-size: 0.85rem; }
+.no-selection .hint { margin-top: 8px; font-size: 0.78rem; }
+
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 0.78rem; color: #636e72; margin-bottom: 4px; }
+.field input, .field select { width: 100%; padding: 7px 9px; border: 1px solid #dfe6e9; border-radius: 6px; font-size: 0.88rem; transition: border-color 0.15s; }
+.field input:focus, .field select:focus { outline: none; border-color: #6c5ce7; }
+.field .hint-text { font-size: 0.72rem; color: #b2bec3; margin-top: 3px; }
+
+.node-type-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-bottom: 10px; }
+.badge-decision { background: #dfe6ff; color: #6c5ce7; }
+.badge-chance { background: #fff3e0; color: #e17055; }
+.badge-terminal { background: #e0fff4; color: #00b894; }
+
+.prob-warning { background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 6px 10px; font-size: 0.75rem; color: #856404; margin-top: 8px; }
+
+/* Add child buttons */
+.add-buttons { display: flex; flex-direction: column; gap: 6px; }
+.btn-add-node { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 500; border: 1.5px dashed; transition: all 0.15s; text-align: left; }
+.btn-add-decision { border-color: #a29bfe; color: #6c5ce7; background: none; }
+.btn-add-decision:hover { background: #f0eeff; }
+.btn-add-chance { border-color: #fdcb6e; color: #e17055; background: none; }
+.btn-add-chance:hover { background: #fff8f0; }
+.btn-add-terminal { border-color: #55efc4; color: #00b894; background: none; }
+.btn-add-terminal:hover { background: #f0fff8; }
+.btn-delete { width: 100%; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 0.82rem; background: none; border: 1.5px solid #fab1a0; color: #d63031; transition: all 0.15s; margin-top: 4px; }
+.btn-delete:hover { background: #fff0ee; }
+
+/* Legend */
+.legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 0.8rem; color: #636e72; }
+.legend-shape { width: 20px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+
+/* EV Summary */
+.ev-summary { background: #f8f5ff; border: 1px solid #d6cbff; border-radius: 8px; padding: 12px; margin: 12px 16px; }
+.ev-summary .ev-label { font-size: 0.75rem; color: #6c5ce7; font-weight: 600; }
+.ev-summary .ev-value { font-size: 1.4rem; font-weight: 700; color: #6c5ce7; margin-top: 2px; }
+
+/* Canvas */
+.canvas-area { flex: 1; overflow: auto; position: relative; background: #fafbfc; }
+.canvas-inner { position: relative; min-width: 100%; min-height: 100%; }
+
+svg#tree-svg { display: block; }
+
+/* Node styles */
+.node-group { cursor: pointer; }
+.node-group:hover .node-shape { filter: brightness(0.95); }
+.node-shape { transition: filter 0.15s; }
+.node-selected .node-shape { stroke-width: 3 !important; }
+
+/* Edge */
+.edge-path { fill: none; stroke: #b2bec3; stroke-width: 1.5; }
+.edge-label { font-size: 11px; fill: #636e72; }
+.edge-ev { font-size: 10px; fill: #6c5ce7; font-weight: 600; }
+
+/* Empty hint */
+.canvas-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #b2bec3; text-align: center; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hicon">
+    <svg viewBox="0 0 24 24" width="18" height="18"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
+  </div>
+  <div>
+    <h1>ディシジョンツリー</h1>
+    <div class="subtitle">意思決定分析ツール（期待値計算）</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn-header btn-reset" onclick="resetTree()">リセット</button>
+  </div>
+</header>
+
+<main>
+  <!-- Left Panel -->
+  <div class="panel">
+    <!-- EV Summary -->
+    <div class="ev-summary" id="ev-summary">
+      <div class="ev-label">ルートの期待値（EV）</div>
+      <div class="ev-value" id="root-ev">—</div>
+    </div>
+
+    <!-- Selected node editor -->
+    <div id="panel-content">
+      <div class="no-selection">
+        <div>ノードをクリックして選択</div>
+        <div class="hint">選択すると編集・子ノード追加ができます</div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="panel-section" style="margin-top:auto;">
+      <h3>凡例</h3>
+      <div class="legend-item">
+        <div class="legend-shape">
+          <svg width="20" height="16"><rect x="1" y="1" width="18" height="14" rx="2" fill="#dfe6ff" stroke="#6c5ce7" stroke-width="1.5"/></svg>
+        </div>
+        意思決定ノード（選択）
+      </div>
+      <div class="legend-item">
+        <div class="legend-shape">
+          <svg width="20" height="16"><circle cx="10" cy="8" r="7" fill="#fff3e0" stroke="#e17055" stroke-width="1.5"/></svg>
+        </div>
+        確率ノード（期待値）
+      </div>
+      <div class="legend-item">
+        <div class="legend-shape">
+          <svg width="20" height="16"><rect x="1" y="1" width="18" height="14" rx="6" fill="#e0fff4" stroke="#00b894" stroke-width="1.5"/></svg>
+        </div>
+        結果ノード（終端値）
+      </div>
+    </div>
+  </div>
+
+  <!-- Canvas -->
+  <div class="canvas-area" id="canvas-area">
+    <div class="canvas-inner" id="canvas-inner">
+      <svg id="tree-svg"></svg>
+    </div>
+    <div class="canvas-hint" id="canvas-hint" style="display:none;">
+      ノードをクリックして選択し、子ノードを追加してください
+    </div>
+  </div>
+</main>
+
+<script>
+// ============================================================
+// Data
+// ============================================================
+let nodes = {};
+let selectedId = null;
+let nextId = 1;
+
+const NODE_W = 130;
+const NODE_H = 52;
+const LEAF_SPACING = 90;   // vertical gap between leaves
+const LEVEL_W = 210;       // horizontal gap between depths
+const MARGIN = 60;
+
+function createNode(label, type, parentId, probability = 0.5, value = 0) {
+  const id = `n${nextId++}`;
+  nodes[id] = { id, label, type, probability, value, parentId, children: [] };
+  if (parentId) nodes[parentId].children.push(id);
+  return id;
+}
+
+function initTree() {
+  nodes = {};
+  nextId = 1;
+  selectedId = null;
+  const root = createNode('意思決定', 'decision', null, 1, 0);
+  // sample
+  const c1 = createNode('選択肢A', 'chance', root);
+  const c2 = createNode('選択肢B', 'chance', root);
+  createNode('成功', 'terminal', c1, 0.7, 1000);
+  createNode('失敗', 'terminal', c1, 0.3, -200);
+  createNode('成功', 'terminal', c2, 0.5, 800);
+  createNode('失敗', 'terminal', c2, 0.5, 100);
+  render();
+  updatePanel();
+}
+
+function getRootId() {
+  return Object.values(nodes).find(n => !n.parentId)?.id;
+}
+
+// ============================================================
+// EV Calculation
+// ============================================================
+function calcEV(id) {
+  const node = nodes[id];
+  if (!node) return 0;
+  if (node.type === 'terminal') return node.value;
+  if (node.children.length === 0) return 0;
+
+  const childEVs = node.children.map(cid => ({
+    ev: calcEV(cid),
+    prob: nodes[cid].probability
+  }));
+
+  if (node.type === 'chance') {
+    return childEVs.reduce((sum, c) => sum + c.prob * c.ev, 0);
+  } else {
+    // decision: max EV child
+    return Math.max(...childEVs.map(c => c.ev));
+  }
+}
+
+function getBestChildId(id) {
+  const node = nodes[id];
+  if (node.type !== 'decision' || node.children.length === 0) return null;
+  let best = null, bestEV = -Infinity;
+  for (const cid of node.children) {
+    const ev = calcEV(cid);
+    if (ev > bestEV) { bestEV = ev; best = cid; }
+  }
+  return best;
+}
+
+// ============================================================
+// Layout
+// ============================================================
+function countLeaves(id) {
+  const node = nodes[id];
+  if (node.children.length === 0) return 1;
+  return node.children.reduce((s, cid) => s + countLeaves(cid), 0);
+}
+
+function assignPositions(id, depth, leafOffset) {
+  const node = nodes[id];
+  node._x = MARGIN + depth * LEVEL_W;  // depth → horizontal
+  if (node.children.length === 0) {
+    node._y = MARGIN + leafOffset * LEAF_SPACING;  // leaves spread vertically
+    return leafOffset + 1;
+  }
+  let cur = leafOffset;
+  for (const cid of node.children) {
+    cur = assignPositions(cid, depth + 1, cur);
+  }
+  const fc = nodes[node.children[0]];
+  const lc = nodes[node.children[node.children.length - 1]];
+  node._y = (fc._y + lc._y) / 2;  // center vertically over children
+  return cur;
+}
+
+// ============================================================
+// Render
+// ============================================================
+function fmtNum(n) {
+  if (Math.abs(n) >= 10000) return (n / 10000).toFixed(1) + '万';
+  return n.toLocaleString('ja-JP', { maximumFractionDigits: 1 });
+}
+
+function render() {
+  const rootId = getRootId();
+  if (!rootId) return;
+
+  const leafCount = countLeaves(rootId);
+  assignPositions(rootId, 0, 0);
+
+  let maxX = 0, maxY = 0;
+  Object.values(nodes).forEach(n => {
+    maxX = Math.max(maxX, n._x + NODE_W / 2);
+    maxY = Math.max(maxY, n._y + NODE_H / 2);
+  });
+  const svgW = maxX + MARGIN * 2;
+  const svgH = Math.max(maxY + MARGIN * 2, 300);
+
+  const svg = document.getElementById('tree-svg');
+  svg.setAttribute('width', svgW);
+  svg.setAttribute('height', svgH);
+  svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+  svg.innerHTML = '';
+
+  const defs = svgEl('defs');
+  const marker = svgEl('marker');
+  marker.setAttribute('id', 'arrow');
+  marker.setAttribute('markerWidth', '8');
+  marker.setAttribute('markerHeight', '8');
+  marker.setAttribute('refX', '6');
+  marker.setAttribute('refY', '3');
+  marker.setAttribute('orient', 'auto');
+  const arrowPath = svgEl('path');
+  arrowPath.setAttribute('d', 'M0,0 L0,6 L8,3 z');
+  arrowPath.setAttribute('fill', '#b2bec3');
+  marker.appendChild(arrowPath);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
+  const rootEV = calcEV(rootId);
+
+  // Draw edges
+  Object.values(nodes).forEach(node => {
+    node.children.forEach(cid => {
+      const child = nodes[cid];
+      drawEdge(svg, node, child, rootId);
+    });
+  });
+
+  // Draw nodes
+  Object.values(nodes).forEach(node => {
+    drawNode(svg, node, rootId);
+  });
+
+  // Update EV display
+  const evEl = document.getElementById('root-ev');
+  if (evEl) evEl.textContent = fmtNum(rootEV);
+}
+
+function svgEl(tag) {
+  return document.createElementNS('http://www.w3.org/2000/svg', tag);
+}
+
+function setText(el, text) {
+  el.textContent = text;
+  return el;
+}
+
+function drawEdge(svg, parent, child, rootId) {
+  const x1 = parent._x + NODE_W / 2;
+  const y1 = parent._y;
+  const x2 = child._x - NODE_W / 2;
+  const y2 = child._y;
+  const mx = (x1 + x2) / 2;
+
+  const path = svgEl('path');
+  path.setAttribute('class', 'edge-path');
+  path.setAttribute('d', `M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`);
+  path.setAttribute('marker-end', 'url(#arrow)');
+
+  if (parent.type === 'decision') {
+    const bestId = getBestChildId(parent.id);
+    if (bestId === child.id) {
+      path.setAttribute('stroke', '#6c5ce7');
+      path.setAttribute('stroke-width', '2.5');
+    }
+  }
+  svg.appendChild(path);
+
+  if (parent.type === 'chance') {
+    const pLabel = svgEl('text');
+    pLabel.setAttribute('x', mx);
+    pLabel.setAttribute('y', (y1 + y2) / 2 - 5);
+    pLabel.setAttribute('class', 'edge-label');
+    pLabel.setAttribute('text-anchor', 'middle');
+    pLabel.textContent = `p=${(child.probability * 100).toFixed(0)}%`;
+    svg.appendChild(pLabel);
+  }
+}
+
+function drawNode(svg, node, rootId) {
+  const x = node._x;
+  const y = node._y;
+  const hw = NODE_W / 2;
+  const hh = NODE_H / 2;
+  const ev = calcEV(node.id);
+  const isSelected = node.id === selectedId;
+
+  const g = svgEl('g');
+  g.setAttribute('class', 'node-group' + (isSelected ? ' node-selected' : ''));
+  g.addEventListener('click', (e) => { e.stopPropagation(); selectNode(node.id); });
+
+  // Colors
+  const colors = {
+    decision: { fill: '#edeaff', stroke: '#6c5ce7' },
+    chance:   { fill: '#fff3e0', stroke: '#e17055' },
+    terminal: { fill: '#e0fff4', stroke: '#00b894' }
+  };
+  const c = colors[node.type];
+
+  // Shape
+  let shape;
+  if (node.type === 'decision') {
+    shape = svgEl('rect');
+    shape.setAttribute('x', x - hw);
+    shape.setAttribute('y', y - hh);
+    shape.setAttribute('width', NODE_W);
+    shape.setAttribute('height', NODE_H);
+    shape.setAttribute('rx', '4');
+  } else if (node.type === 'chance') {
+    shape = svgEl('ellipse');
+    shape.setAttribute('cx', x);
+    shape.setAttribute('cy', y);
+    shape.setAttribute('rx', hw);
+    shape.setAttribute('ry', hh);
+  } else {
+    shape = svgEl('rect');
+    shape.setAttribute('x', x - hw);
+    shape.setAttribute('y', y - hh);
+    shape.setAttribute('width', NODE_W);
+    shape.setAttribute('height', NODE_H);
+    shape.setAttribute('rx', '14');
+  }
+  shape.setAttribute('class', 'node-shape');
+  shape.setAttribute('fill', c.fill);
+  shape.setAttribute('stroke', c.stroke);
+  shape.setAttribute('stroke-width', isSelected ? '3' : '1.5');
+  g.appendChild(shape);
+
+  // Label
+  const label = svgEl('text');
+  label.setAttribute('x', x);
+  label.setAttribute('y', node.type === 'terminal' ? y - 6 : y - 4);
+  label.setAttribute('text-anchor', 'middle');
+  label.setAttribute('dominant-baseline', 'middle');
+  label.setAttribute('font-size', '12');
+  label.setAttribute('font-weight', '600');
+  label.setAttribute('fill', '#2d3436');
+  // Truncate long labels
+  const maxLen = 9;
+  label.textContent = node.label.length > maxLen ? node.label.slice(0, maxLen) + '…' : node.label;
+  g.appendChild(label);
+
+  // EV or value sub-label
+  const evText = svgEl('text');
+  evText.setAttribute('x', x);
+  evText.setAttribute('y', node.type === 'terminal' ? y + 10 : y + 10);
+  evText.setAttribute('text-anchor', 'middle');
+  evText.setAttribute('dominant-baseline', 'middle');
+  evText.setAttribute('font-size', '11');
+  evText.setAttribute('fill', c.stroke);
+  evText.setAttribute('font-weight', '500');
+  if (node.type === 'terminal') {
+    evText.textContent = `${fmtNum(node.value)}`;
+  } else {
+    evText.textContent = `EV: ${fmtNum(ev)}`;
+  }
+  g.appendChild(evText);
+
+  svg.appendChild(g);
+}
+
+// ============================================================
+// Interaction
+// ============================================================
+function selectNode(id) {
+  selectedId = id;
+  render();
+  updatePanel();
+}
+
+function updatePanel() {
+  const container = document.getElementById('panel-content');
+  if (!selectedId || !nodes[selectedId]) {
+    container.innerHTML = `<div class="no-selection"><div>ノードをクリックして選択</div><div class="hint">選択すると編集・子ノード追加ができます</div></div>`;
+    return;
+  }
+  const node = nodes[selectedId];
+  const parent = node.parentId ? nodes[node.parentId] : null;
+  const typeLabels = { decision: '意思決定', chance: '確率', terminal: '結果（終端）' };
+  const badgeClass = { decision: 'badge-decision', chance: 'badge-chance', terminal: 'badge-terminal' };
+
+  // Probability warning
+  let probWarning = '';
+  if (parent && parent.type === 'chance') {
+    const total = parent.children.reduce((s, cid) => s + nodes[cid].probability, 0);
+    if (Math.abs(total - 1) > 0.01) {
+      probWarning = `<div class="prob-warning">⚠ 兄弟ノードの確率の合計: ${(total * 100).toFixed(1)}%（合計100%にしてください）</div>`;
+    }
+  }
+
+  const showProb = parent && parent.type === 'chance';
+  const showValue = node.type === 'terminal';
+
+  container.innerHTML = `
+    <div class="panel-section">
+      <h3>選択中のノード</h3>
+      <span class="node-type-badge ${badgeClass[node.type]}">${typeLabels[node.type]}</span>
+      <div class="field">
+        <label>ラベル</label>
+        <input type="text" id="edit-label" value="${escHtml(node.label)}" oninput="updateNodeProp('label', this.value)">
+      </div>
+      <div class="field">
+        <label>ノードタイプ</label>
+        <select id="edit-type" onchange="updateNodeProp('type', this.value)">
+          <option value="decision" ${node.type==='decision'?'selected':''}>意思決定（□）</option>
+          <option value="chance" ${node.type==='chance'?'selected':''}>確率（○）</option>
+          <option value="terminal" ${node.type==='terminal'?'selected':''}>結果・終端（◎）</option>
+        </select>
+      </div>
+      ${showProb ? `
+      <div class="field">
+        <label>確率（0〜1）</label>
+        <input type="number" id="edit-prob" value="${node.probability}" min="0" max="1" step="0.01" oninput="updateNodeProp('probability', parseFloat(this.value)||0)">
+        ${probWarning}
+      </div>` : ''}
+      ${showValue ? `
+      <div class="field">
+        <label>結果値</label>
+        <input type="number" id="edit-value" value="${node.value}" step="any" oninput="updateNodeProp('value', parseFloat(this.value)||0)">
+        <div class="hint-text">利益・損失などの金額や点数を入力</div>
+      </div>` : ''}
+    </div>
+
+    ${node.type !== 'terminal' ? `
+    <div class="panel-section">
+      <h3>子ノードを追加</h3>
+      <div class="add-buttons">
+        <button class="btn-add-node btn-add-decision" onclick="addChild('decision')">＋ 意思決定ノード（□）</button>
+        <button class="btn-add-node btn-add-chance" onclick="addChild('chance')">＋ 確率ノード（○）</button>
+        <button class="btn-add-node btn-add-terminal" onclick="addChild('terminal')">＋ 結果ノード（◎）</button>
+      </div>
+    </div>` : ''}
+
+    ${node.parentId ? `
+    <div class="panel-section">
+      <button class="btn-delete" onclick="deleteNode('${node.id}')">このノードを削除（子も含む）</button>
+    </div>` : ''}
+  `;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function updateNodeProp(prop, value) {
+  if (!selectedId || !nodes[selectedId]) return;
+  nodes[selectedId][prop] = value;
+  render();
+  // Don't call updatePanel to avoid losing focus
+  // Just update EV display
+  const rootEV = calcEV(getRootId());
+  const evEl = document.getElementById('root-ev');
+  if (evEl) evEl.textContent = fmtNum(rootEV);
+}
+
+function addChild(type) {
+  if (!selectedId) return;
+  const labels = { decision: '意思決定', chance: '確率的事象', terminal: '結果' };
+  const newId = createNode(labels[type], type, selectedId);
+  render();
+  selectNode(newId);
+}
+
+function deleteNode(id) {
+  if (!id || !nodes[id]) return;
+  const node = nodes[id];
+  if (!node.parentId) return; // can't delete root
+
+  // Remove from parent
+  const parent = nodes[node.parentId];
+  parent.children = parent.children.filter(c => c !== id);
+
+  // Recursively delete children
+  function deleteSubtree(nid) {
+    const n = nodes[nid];
+    if (!n) return;
+    n.children.forEach(cid => deleteSubtree(cid));
+    delete nodes[nid];
+  }
+  deleteSubtree(id);
+
+  selectedId = node.parentId;
+  render();
+  updatePanel();
+}
+
+function resetTree() {
+  if (!confirm('ツリーをリセットしますか？')) return;
+  initTree();
+}
+
+// Click canvas to deselect
+document.getElementById('canvas-area').addEventListener('click', () => {
+  selectedId = null;
+  render();
+  updatePanel();
+});
+
+// Init
+initTree();
+</script>
+</body>
+</html>
